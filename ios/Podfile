@@ -1,0 +1,16 @@
+platform :ios, '13.0'
+
+prepare_command "ruby -e \"require 'fileutils'; FileUtils.touch('Flutter/Generated.xcconfig') unless File.exist?('Flutter/Generated.xcconfig')\""
+
+target 'Runner' do
+  use_frameworks!
+  use_native_modules!
+
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+  end
+end

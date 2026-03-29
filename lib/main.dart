@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; 
 import 'package:audioplayers/audioplayers.dart';
 
 void main() => runApp(const MaterialApp(
@@ -31,6 +32,7 @@ class _SnakeGameState extends State<SnakeGame> with WidgetsBindingObserver {
   int bestScore = 0;
 
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final FocusNode _focusNode = FocusNode();  
 
   @override
   void initState() {
@@ -60,6 +62,8 @@ class _SnakeGameState extends State<SnakeGame> with WidgetsBindingObserver {
   void startGame() async {
     if (isPlaying) return;
     _directionQueue.clear(); 
+    _focusNode.requestFocus(); 
+    
     try {
       await _audioPlayer.play(AssetSource('bgm.mp3'));
     } catch (e) {
@@ -73,13 +77,13 @@ class _SnakeGameState extends State<SnakeGame> with WidgetsBindingObserver {
       currentScore = 0;
     });
     
-    // 这里的 120ms 是逻辑帧率，Flutter 的渲染帧率依然是 60/120fps
     gameTimer = Timer.periodic(const Duration(milliseconds: 120), (Timer timer) {
       updateSnake();
     });
   }
 
   void updateSnake() {
+    if (!mounted) return;
     setState(() {
       if (_directionQueue.isNotEmpty) {
         direction = _directionQueue.removeFirst();
@@ -140,7 +144,10 @@ class _SnakeGameState extends State<SnakeGame> with WidgetsBindingObserver {
         actions: [
           Center(
             child: TextButton(
-              onPressed: () { Navigator.pop(context); startGame(); },
+              onPressed: () { 
+                Navigator.pop(context); 
+                startGame(); 
+              },
               child: const Text("RETRY", style: TextStyle(color: Colors.cyanAccent)),
             ),
           )
@@ -165,76 +172,93 @@ class _SnakeGameState extends State<SnakeGame> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _audioPlayer.dispose();
     gameTimer?.cancel();
+    _focusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF1B5E20),
-      body: SafeArea(
-        child: LayoutBuilder(builder: (context, constraints) {
-          double cellSize = constraints.maxWidth / columnCount;
-          double playAreaHeight = constraints.maxHeight - 240; 
-          rowCount = (playAreaHeight / cellSize).floor();
-          totalSlots = columnCount * rowCount;
+    return Focus(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: (FocusNode node, KeyEvent event) {
+        if (event is KeyDownEvent) {
+          final key = event.logicalKey;
+          if (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.keyW) {
+            _handleDirectionChange('up');
+          } else if (key == LogicalKeyboardKey.arrowDown || key == LogicalKeyboardKey.keyS) {
+            _handleDirectionChange('down');
+          } else if (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.keyA) {
+            _handleDirectionChange('left');
+          } else if (key == LogicalKeyboardKey.arrowRight || key == LogicalKeyboardKey.keyD) {
+            _handleDirectionChange('right');
+          } else if (key == LogicalKeyboardKey.space || key == LogicalKeyboardKey.enter) {
+            if (!isPlaying) startGame();
+          }
+          return KeyEventResult.handled; 
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF1B5E20),
+        body: SafeArea(
+          child: LayoutBuilder(builder: (context, constraints) {
+            double cellSize = constraints.maxWidth / columnCount;
+            double playAreaHeight = constraints.maxHeight - 240; 
+            rowCount = (playAreaHeight / cellSize).floor();
+            totalSlots = columnCount * rowCount;
 
-          return Column(
-            children: [
-              // 1. 分数栏单独抽离或保持简洁
-              _buildScoreBar(),
-              
-              Expanded(
-                child: Center(
-                  child: AspectRatio(
-                    aspectRatio: columnCount / rowCount,
-                    // 2. 核心优化：RepaintBoundary 隔离重绘区域
-                    child: RepaintBoundary(
-                      child: GestureDetector(
-                        onVerticalDragUpdate: (d) {
-                          if (d.delta.dy > 5) _handleDirectionChange('down');
-                          else if (d.delta.dy < -5) _handleDirectionChange('up');
-                        },
-                        onHorizontalDragUpdate: (d) {
-                          if (d.delta.dx > 5) _handleDirectionChange('right');
-                          else if (d.delta.dx < -5) _handleDirectionChange('left');
-                        },
-                        child: GridView.builder(
-                          itemCount: totalSlots,
-                          // 3. 性能优化：固定高度防止布局抖动
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: columnCount,
-                          ),
-                          itemBuilder: (context, i) {
-                            // 逻辑判断尽量精简
-                            final bool isSnakeHead = (i == snake.last);
-                            final bool isSnakeBody = !isSnakeHead && snake.contains(i);
-                            final bool isFood = (i == food);
-                            
-                            // 4. 优化：不使用 BoxDecoration，改用极简 Container
-                            return Container(
-                              color: isSnakeHead 
-                                  ? Colors.cyanAccent 
-                                  : (isSnakeBody 
-                                      ? Colors.white 
-                                      : (isFood 
-                                          ? Colors.redAccent 
-                                          : ((i ~/ columnCount + i % columnCount) % 2 == 0 
-                                              ? const Color(0xFF2E7D32) 
-                                              : const Color(0xFF388E3C)))),
-                            );
+            return Column(
+              children: [
+                _buildScoreBar(),
+                Expanded(
+                  child: Center(
+                    child: AspectRatio(
+                      aspectRatio: columnCount / rowCount,
+                      child: RepaintBoundary(
+                        child: GestureDetector(
+                          onVerticalDragUpdate: (d) {
+                            if (d.delta.dy > 5) _handleDirectionChange('down');
+                            else if (d.delta.dy < -5) _handleDirectionChange('up');
                           },
+                          onHorizontalDragUpdate: (d) {
+                            if (d.delta.dx > 5) _handleDirectionChange('right');
+                            else if (d.delta.dx < -5) _handleDirectionChange('left');
+                          },
+                          child: GridView.builder(
+                            itemCount: totalSlots,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: columnCount,
+                            ),
+                            itemBuilder: (context, i) {
+                              final bool isSnakeHead = (i == snake.last);
+                              final bool isSnakeBody = !isSnakeHead && snake.contains(i);
+                              final bool isFood = (i == food);
+                              
+                              return Container(
+                                color: isSnakeHead 
+                                    ? Colors.cyanAccent 
+                                    : (isSnakeBody 
+                                        ? Colors.white 
+                                        : (isFood 
+                                            ? Colors.redAccent 
+                                            : ((i ~/ columnCount + i % columnCount) % 2 == 0 
+                                                ? const Color(0xFF2E7D32) 
+                                                : const Color(0xFF388E3C)))),
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              _buildControls(),
-            ],
-          );
-        }),
+                _buildControls(),
+              ],
+            );
+          }),
+        ),
       ),
     );
   }
