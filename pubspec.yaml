@@ -1,5 +1,5 @@
 name: znso4pa_snake
-description: "A new Flutter project."
+description: "A high-performance snake game developed by znso4pa."
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -16,9 +16,21 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # 1. 注册图标生成插件
+  flutter_launcher_icons: ^0.13.1
+
+# 2. 图标生成专属配置
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/icon.png"
+  # 使用深绿色作为 Android 适配背景
+  adaptive_icon_background: "#1B5E20"
+  adaptive_icon_foreground: "assets/icon/icon.png"
 
 flutter:
   uses-material-design: true
 
   assets:
-    - assets/bgm.mp3 # 注册背景音乐
+    - assets/bgm.mp3 # 背景音乐
+    - assets/icon/icon.png # 图标资源
